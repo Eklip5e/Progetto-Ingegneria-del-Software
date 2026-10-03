@@ -1,0 +1,83 @@
+# CI - Continuous Integration
+#
+# File gia pronto. E uno dei "criteri di premialita" (processo di continuous
+# integration) ed e uno dei modi piu economici per guadagnare punti senza
+# scrivere codice in piu.
+#
+# Cosa fa: a ogni push e a ogni pull request compila il progetto, esegue tutti i
+# test e verifica che la copertura sia sopra la soglia dichiarata nel Test Plan.
+# Se qualcosa fallisce la CI si mette rossa: lo vedete subito, prima del docente.
+#
+# NON spostare questo file: GitHub Actions cerca i workflow in .github/workflows/
+#
+# ---------------------------------------------------------------------------
+# Branch protection (da configurare a mano nelle impostazioni del repository):
+#   Settings -> Branches -> Add rule
+#     Branch name pattern : main
+#     Require status checks to pass before merging : build
+# Cosi nessuno puo mergiare in main con la CI rossa.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    name: Build e test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # "verify" esegue compile -> test -> jacoco check.
+      # Se un test fallisce o la copertura e sotto soglia, il job fallisce.
+      - name: Build e test con coverage
+        run: mvn -B verify
+
+      - name: Pubblica il report di copertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: 6_codice/target/site/jacoco/
+          retention-days: 30
+
+      - name: Pubblica i report JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: 6_codice/target/surefire-reports/
+          retention-days: 30
+
+# ---------------------------------------------------------------------------
+# Secondo job opzionale: eseguire i test con il database in ambiente pulito,
+# per dimostrare che i test non dipendono da residui locali.
+# Scommentare quando avrete un database reale.
+# ---------------------------------------------------------------------------
+# verify-clean-environment:
+#   name: Test in ambiente pulito
+#   runs-on: ubuntu-latest
+#   steps:
+#     - uses: actions/checkout@v4
+#     - uses: actions/setup-java@v4
+#       with:
+#         distribution: temurin
+#         java-version: '17'
+#         cache: maven
+#     - name: Verifica assenza database preesistenti
+#       run: find . -name '*.db' -o -name '*.sqlite' | grep . && exit 1 || echo "ambiente pulito"
+#     - run: mvn -B clean verify
